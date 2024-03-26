@@ -20,9 +20,9 @@ library(patchwork)
 
 RECOVERY <- read_excel("F:/LINKOPING/Manuscripts/Skyline/Skyline/OrbitrapDust.xlsx") |> 
   filter(`Isotope Label Type` == "Quan") |> 
-  pivot_wider(id_cols = `Replicate Name`,
+  pivot_wider(id_cols = c(`Replicate Name`, `Sample Type`),
               names_from = Molecule, # name of the new column
-              values_from = `Normalized Area`) #name of the values for the new columns
+              values_from = Area) #name of the values for the new columns
 
 
 ##########Filter and prepare the standards that we want to compare to, (I named them Std)
@@ -70,7 +70,8 @@ TESTING <- read_excel("F:/LINKOPING/Manuscripts/Skyline/Skyline/OrbitrapDust.xls
 
 # Replace missing values in the Response_factor column with 0
 TESTING <- TESTING |> 
-  mutate(`Normalized Area` = replace_na(`Normalized Area`, 0))
+         mutate(`Normalized Area` = as.numeric(`Normalized Area`),  # Convert to numeric
+                `Normalized Area` = ifelse(is.na(`Normalized Area`), 0, `Normalized Area`))  # Replace NAs with 0
 
 # Function to create molecule names
 create_molecule_name <- function(i, j) {
@@ -106,7 +107,9 @@ for (i in i_values) {
       filter(str_detect(Molecule, "C14", negate = TRUE))|>#Exclude the calibration MCCPs
       filter(str_detect(Molecule, "C15", negate = TRUE))|>#Exclude the calibration MCCPs
       filter(str_detect(Molecule, "C16", negate = TRUE))|>#Exclude the calibration MCCPs
-      filter(str_detect(Molecule, "C17", negate = TRUE)) #Exclude the calibration MCCPs 
+      filter(str_detect(Molecule, "C17", negate = TRUE)) |>#Exclude the calibration MCCPs
+      filter(str_detect(Molecule, "IS", negate = TRUE)) |> #Exclude the calibration IS
+      filter(str_detect(Molecule, "IS", negate = TRUE)) #Exclude the calibration RS 
     
     # Check if there are any non-NA cases in the filtered data
     if (sum(!is.na(filtered_dataA$`Normalized Area`)) == 0 || sum(!is.na(filtered_dataA$`Analyte Concentration`)) == 0) {
@@ -217,7 +220,9 @@ for (i in i_values) {
       filter(str_detect(Molecule, "C14", negate = TRUE))|>#Exclude the calibration MCCPs
       filter(str_detect(Molecule, "C15", negate = TRUE))|>#Exclude the calibration MCCPs
       filter(str_detect(Molecule, "C16", negate = TRUE))|>#Exclude the calibration MCCPs
-      filter(str_detect(Molecule, "C17", negate = TRUE)) #Exclude the calibration MCCPs
+      filter(str_detect(Molecule, "C17", negate = TRUE))|>#Exclude the calibration MCCPs
+      filter(str_detect(Molecule, "IS", negate = TRUE)) |> #Exclude the calibration IS
+      filter(str_detect(Molecule, "IS", negate = TRUE)) #Exclude the calibration RS
     
     # Check if there are any non-NA cases in the filtered data
     if (sum(!is.na(filtered_dataB$`Normalized Area`)) == 0 || sum(!is.na(filtered_dataB$`Analyte Concentration`)) == 0) {
@@ -316,7 +321,9 @@ TESTINGB <- TESTING |>
   filter(str_detect(Homologue, "C14", negate = TRUE))|>#Exclude the calibration MCCPs
   filter(str_detect(Homologue, "C15", negate = TRUE))|>#Exclude the calibration MCCPs
   filter(str_detect(Homologue, "C16", negate = TRUE))|>#Exclude the calibration MCCPs
-  filter(str_detect(Homologue, "C17", negate = TRUE)) #Exclude the calibration MCCPs
+  filter(str_detect(Homologue, "C17", negate = TRUE))|>#Exclude the calibration MCCPs
+  filter(str_detect(Homologue, "IS", negate = TRUE)) |> #Exclude the calibration IS
+  filter(str_detect(Homologue, "RS", negate = TRUE)) #Exclude the calibration RS
 
 # Group samples for creating one data frame for each: the CALIBRATION script requires to have one data frame for each sample, so out of the current data frame we should create a new of for each of the samples
 list_of_samples <- split(TESTINGB, TESTINGB$`Replicate Name`)
@@ -510,8 +517,10 @@ TESTING <- read_excel("F:/LINKOPING/Manuscripts/Skyline/Skyline/OrbitrapDust.xls
   mutate(`Analyte Concentration` = as.numeric(`Analyte Concentration`)) 
 
 # Replace missing values in the Response_factor column with 0
-TESTING <- TESTING |> 
-  mutate(`Normalized Area` = replace_na(`Normalized Area`, 0))
+TESTING <- TESTING %>%
+  mutate(`Normalized Area` = ifelse(is.na(`Normalized Area`) | is.nan(`Normalized Area`), 0, `Normalized Area`)) #Replace with 0
+   
+         
 
 # Function to create molecule names
 create_molecule_name <- function(i, j) {
@@ -542,12 +551,14 @@ for (i in i_values) {
     
     # Filter data for the current molecule
     filtered_dataA <- TESTING |>
-      filter(`Isotope Label Type` == "Quan", Molecule == molecule_name, Note == "A")|> 
+      filter(`Isotope Label Type` == "Quan", Molecule == molecule_name, Note == "D")|> 
       filter(str_detect(Molecule, "C9", negate = TRUE))|>#Exclude the calibration vSCCPs
       filter(str_detect(Molecule, "C10", negate = TRUE))|>#Exclude the calibration SCCPs
       filter(str_detect(Molecule, "C11", negate = TRUE))|>#Exclude the calibration SCCPs
       filter(str_detect(Molecule, "C12", negate = TRUE))|>#Exclude the calibration SCCPs
-      filter(str_detect(Molecule, "C13", negate = TRUE)) #Exclude the calibration SCCPs 
+      filter(str_detect(Molecule, "C13", negate = TRUE)) |>#Exclude the calibration SCCPs
+      filter(str_detect(Molecule, "IS", negate = TRUE)) |> #Exclude the calibration IS
+      filter(str_detect(Molecule, "RS", negate = TRUE)) #Exclude the calibration RS
     
     # Check if there are any non-NA cases in the filtered data
     if (sum(!is.na(filtered_dataA$`Normalized Area`)) == 0 || sum(!is.na(filtered_dataA$`Analyte Concentration`)) == 0) {
@@ -619,10 +630,9 @@ calibration_curves_gridA
 ########################### STANDARDS B #####################################################################################
 
 
-
 # Replace missing values in the Response_factor column with 0
 TESTING <- TESTING |> 
-  mutate(`Normalized Area` = replace_na(`Normalized Area`, 0)) 
+  mutate(`Normalized Area` = replace_na(`Normalized Area`, 0))
 
 # Function to create molecule names
 create_molecule_name <- function(i, j) {
@@ -653,12 +663,14 @@ for (i in i_values) {
     
     # Filter data for the current molecule
     filtered_dataB <- TESTING |>
-      filter(`Isotope Label Type` == "Quan", Molecule == molecule_name, Note == "B") |> 
+      filter(`Isotope Label Type` == "Quan", Molecule == molecule_name, Note == "E") |> 
       filter(str_detect(Molecule, "C9", negate = TRUE))|>#Exclude the calibration vSCCPs
       filter(str_detect(Molecule, "C10", negate = TRUE))|>#Exclude the calibration SCCPs
       filter(str_detect(Molecule, "C11", negate = TRUE))|>#Exclude the calibration SCCPs
       filter(str_detect(Molecule, "C12", negate = TRUE))|>#Exclude the calibration SCCPs
-      filter(str_detect(Molecule, "C13", negate = TRUE)) #Exclude the calibration SCCPs 
+      filter(str_detect(Molecule, "C13", negate = TRUE)) |>#Exclude the calibration SCCPs
+      filter(str_detect(Molecule, "IS", negate = TRUE)) |> #Exclude the calibration IS
+      filter(str_detect(Molecule, "RS", negate = TRUE)) #Exclude the calibration RS 
     
     # Check if there are any non-NA cases in the filtered data
     if (sum(!is.na(filtered_dataB$`Normalized Area`)) == 0 || sum(!is.na(filtered_dataB$`Analyte Concentration`)) == 0) {
@@ -757,7 +769,9 @@ TESTINGB <- TESTING |>
   filter(str_detect(Homologue, "C10", negate = TRUE))|>#Exclude the calibration SCCPs
   filter(str_detect(Homologue, "C11", negate = TRUE))|>#Exclude the calibration SCCPs
   filter(str_detect(Homologue, "C12", negate = TRUE))|>#Exclude the calibration SCCPs
-  filter(str_detect(Homologue, "C13", negate = TRUE)) #Exclude the calibration SCCPs 
+  filter(str_detect(Homologue, "C13", negate = TRUE)) |>#Exclude the calibration SCCPs
+  filter(str_detect(Homologue, "IS", negate = TRUE)) |> #Exclude the calibration IS
+  filter(str_detect(Homologue, "RS", negate = TRUE)) #Exclude the calibration RS
 
 # Group samples for creating one data frame for each: the CALIBRATION script requires to have one data frame for each sample, so out of the current data frame we should create a new of for each of the samples
 list_of_samples <- split(TESTINGB, TESTINGB$`Replicate Name`)
