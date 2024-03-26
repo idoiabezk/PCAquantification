@@ -951,12 +951,27 @@ all_plots[["NIST_R2"]]
 all_plots[["NIST_R3"]]
 
 
+#############################################################################################################
+############################################### RESULTS #####################################################
+#############################################################################################################
+
 ########################### COMBINE SCCPs AND MCCPs ######################################################################
 
 combined_RESULTS <- rbind(all_results_df_SCCPs, all_results_df_MCCPs) |> 
   mutate(Homologue_Concentration = Relative_distribution * Concentration)
 
 
+
+############################SAVE RESULTS####
+#Set save directory (where do we want to save)
+save.directory <- "F:/LINKOPING/Manuscripts/Skyline/Skyline/"
+
+#Save results in excel txt
+write.table(combined_RESULTS, paste(save.directory,"PCA_Qauntification_Results", ".txt", sep = ""), sep="\t") 
+
+#Save results in excel format
+write.table(combined_RESULTS, paste(save.directory,"PCA_Qauntification_Results", ".xlsx", sep = ""), sep="\t") 
+write.table(combined_RESULTS, paste(save.directory,"PCA_Qauntification_Results", ".csv", sep = ""), sep="\t") 
 
 
 
