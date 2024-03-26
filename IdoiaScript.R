@@ -70,8 +70,7 @@ TESTING <- read_excel("F:/LINKOPING/Manuscripts/Skyline/Skyline/OrbitrapDust.xls
 
 # Replace missing values in the Response_factor column with 0
 TESTING <- TESTING |> 
-         mutate(`Normalized Area` = as.numeric(`Normalized Area`),  # Convert to numeric
-                `Normalized Area` = ifelse(is.na(`Normalized Area`), 0, `Normalized Area`))  # Replace NAs with 0
+         mutate(`Normalized Area` = ifelse(is.na(`Normalized Area`), 0, `Normalized Area`))  # Replace NAs with 0
 
 # Function to create molecule names
 create_molecule_name <- function(i, j) {
@@ -323,7 +322,8 @@ TESTINGB <- TESTING |>
   filter(str_detect(Homologue, "C16", negate = TRUE))|>#Exclude the calibration MCCPs
   filter(str_detect(Homologue, "C17", negate = TRUE))|>#Exclude the calibration MCCPs
   filter(str_detect(Homologue, "IS", negate = TRUE)) |> #Exclude the calibration IS
-  filter(str_detect(Homologue, "RS", negate = TRUE)) #Exclude the calibration RS
+  filter(str_detect(Homologue, "RS", negate = TRUE)) |>  #Exclude the calibration RS
+  filter(str_detect(`Replicate Name`, "Std", negate = TRUE)) #Exclude the calibration standards
 
 # Group samples for creating one data frame for each: the CALIBRATION script requires to have one data frame for each sample, so out of the current data frame we should create a new of for each of the samples
 list_of_samples <- split(TESTINGB, TESTINGB$`Replicate Name`)
@@ -771,7 +771,8 @@ TESTINGB <- TESTING |>
   filter(str_detect(Homologue, "C12", negate = TRUE))|>#Exclude the calibration SCCPs
   filter(str_detect(Homologue, "C13", negate = TRUE)) |>#Exclude the calibration SCCPs
   filter(str_detect(Homologue, "IS", negate = TRUE)) |> #Exclude the calibration IS
-  filter(str_detect(Homologue, "RS", negate = TRUE)) #Exclude the calibration RS
+  filter(str_detect(Homologue, "RS", negate = TRUE)) |>  #Exclude the calibration RS
+  filter(str_detect(`Replicate Name`, "Std", negate = TRUE)) #Exclude the calibration standards
 
 # Group samples for creating one data frame for each: the CALIBRATION script requires to have one data frame for each sample, so out of the current data frame we should create a new of for each of the samples
 list_of_samples <- split(TESTINGB, TESTINGB$`Replicate Name`)
@@ -952,7 +953,8 @@ all_plots[["NIST_R3"]]
 
 ########################### COMBINE SCCPs AND MCCPs ######################################################################
 
-combined_RESULTS <- rbind(all_results_df_SCCPs, all_results_df_MCCPs)
+combined_RESULTS <- rbind(all_results_df_SCCPs, all_results_df_MCCPs) |> 
+  mutate(Homologue_Concentration = Relative_distribution * Concentration)
 
 
 
