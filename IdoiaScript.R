@@ -18,7 +18,7 @@ library(patchwork)
 ################################ CALCULATE THE RECOVERY #####################################################
 #############################################################################################################
 
-RECOVERY <- read_excel("F:/LINKOPING/Manuscripts/Skyline/Skyline/OrbitrapDust.xlsx") |> 
+RECOVERY <- read_excel("./data/OrbitrapDust.xlsx") |> 
   filter(`Isotope Label Type` == "Quan") |> 
   pivot_wider(id_cols = c(`Replicate Name`, `Sample Type`),
               names_from = Molecule, # name of the new column
@@ -46,7 +46,7 @@ RECOVERY<-RECOVERY|>
 RECOVERY$color <- ifelse(RECOVERY$RecoveryPerc > 50, "#CD3333", "#9ACD32")
 
 #Reorder the samples
-RECOVERY$`Replicate Name` <- factor(RECOVERY$`Replicate Name`, levels = c("1", "1B", "1C", "2", "3", "4A", "4B", "5A", "5B", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "18", "19", "20", "D1", "D2", "D3", "21 Na2SO4", "23 24 FB", "25 LB", "26 LB", "27 LB", "28 LB", "29 MLB"))
+#RECOVERY$`Replicate Name` <- factor(RECOVERY$`Replicate Name`, levels = c("1", "1B", "1C", "2", "3", "4A", "4B", "5A", "5B", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "18", "19", "20", "D1", "D2", "D3", "21 Na2SO4", "23 24 FB", "25 LB", "26 LB", "27 LB", "28 LB", "29 MLB"))
 
 # Bar plot
 ggplot(RECOVERY, aes(x = `Replicate Name`, y = RecoveryPerc, fill = color)) +
@@ -65,7 +65,7 @@ ggplot(RECOVERY, aes(x = `Replicate Name`, y = RecoveryPerc, fill = color)) +
 
 ########################### STANDARDS A #############################################################
 # Load the file
-TESTING <- read_excel("F:/LINKOPING/Manuscripts/Skyline/Skyline/OrbitrapDust.xlsx") |>
+TESTING <- read_excel("./data/OrbitrapDust.xlsx") |>
   mutate(`Analyte Concentration` = as.numeric(`Analyte Concentration`)) 
 
 # Replace missing values in the Response_factor column with 0
@@ -337,7 +337,7 @@ list_of_samples <- split(TESTINGB, TESTINGB$`Replicate Name`)
 #####GROUP STANDARD MIXTURES USED#####
 
 #####Set working directory#####
-working.directory <- "F:/LINKOPING/Manuscripts/Skyline/Skyline/"
+working.directory <- ".data/"
 
 ##########################################PREPARE DATASET FOR PATTERN RECONSTRUCTION#################
 {
@@ -951,27 +951,12 @@ all_plots[["NIST_R2"]]
 all_plots[["NIST_R3"]]
 
 
-#############################################################################################################
-############################################### RESULTS #####################################################
-#############################################################################################################
-
 ########################### COMBINE SCCPs AND MCCPs ######################################################################
 
 combined_RESULTS <- rbind(all_results_df_SCCPs, all_results_df_MCCPs) |> 
   mutate(Homologue_Concentration = Relative_distribution * Concentration)
 
 
-
-############################SAVE RESULTS####
-#Set save directory (where do we want to save)
-save.directory <- "F:/LINKOPING/Manuscripts/Skyline/Skyline/"
-
-#Save results in excel txt
-write.table(combined_RESULTS, paste(save.directory,"PCA_Qauntification_Results", ".txt", sep = ""), sep="\t") 
-
-#Save results in excel format
-write.table(combined_RESULTS, paste(save.directory,"PCA_Qauntification_Results", ".xlsx", sep = ""), sep="\t") 
-write.table(combined_RESULTS, paste(save.directory,"PCA_Qauntification_Results", ".csv", sep = ""), sep="\t") 
 
 
 
