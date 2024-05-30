@@ -513,7 +513,7 @@ all_plots[["NIST_R3"]]
 
 ########################### STANDARDS A #############################################################
 # Load the file
-TESTING <- read_excel("F:/LINKOPING/Manuscripts/Skyline/Skyline/OrbitrapDust.xlsx") |>
+TESTING <- read_excel("./data/OrbitrapDust.xlsx") |>
   mutate(`Analyte Concentration` = as.numeric(`Analyte Concentration`)) 
 
 # Replace missing values in the Response_factor column with 0
@@ -739,7 +739,7 @@ for (i in 2:length(plotsB)) {
 calibration_curves_gridB
 
 
-########################### COMBINE STNADARDS A AND B ######################################################################
+########################### COMBINE STANDARDS A AND B ######################################################################
 
 combined_df <- rbind(calibration_resultsA, calibration_resultsB)
 
@@ -786,7 +786,7 @@ list_of_samples <- split(TESTINGB, TESTINGB$`Replicate Name`)
 #####GROUP STANDARD MIXTURES USED#####
 
 #####Set working directory#####
-working.directory <- "F:/LINKOPING/Manuscripts/Skyline/Skyline/"
+working.directory <- "./data"
 
 ##########################################PREPARE DATASET FOR PATTERN RECONSTRUCTION#################
 {
