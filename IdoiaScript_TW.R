@@ -4,7 +4,7 @@
 #############################################################################################################
 
 #Clean the environment
-rm(list = ls()) 
+rm(list = ls())
 
 #Load the libraries
 library(dplyr)
@@ -14,11 +14,20 @@ library(readxl)
 library(patchwork)
 
 
+########## HELPER FUNCTIONS ##############
+# Function to create molecule names
+create_molecule_name <- function(i, j) {
+  molecule_name <- paste0("C", i, "H", (2 * i) + 2 - j, "Cl", j)
+  return(molecule_name)
+}
+
+
+
 ##############################################################################################################
 ################################ CALCULATE THE RECOVERY #####################################################
 #############################################################################################################
 
-RECOVERY <- read_excel("F:/LINKOPING/Manuscripts/Skyline/Skyline/OrbitrapDust.xlsx") |> 
+RECOVERY <- read_excel("./data/OrbitrapDust.xlsx") |> 
   filter(`Isotope Label Type` == "Quan") |> 
   pivot_wider(id_cols = c(`Replicate Name`, `Sample Type`),
               names_from = Molecule, # name of the new column
@@ -65,20 +74,19 @@ ggplot(RECOVERY, aes(x = `Replicate Name`, y = RecoveryPerc, fill = color)) +
 
 ########################### STANDARDS A #############################################################
 # Load the file
+
+#--< NEED TO CHECK THE DATATYPES WHEN IMPORTING EXCEL: use glimpse(TESTING)    #-->
+
 TESTING <- read_excel("./data/OrbitrapDust.xlsx") |>
   mutate(`Analyte Concentration` = as.numeric(`Analyte Concentration`)) |> 
   mutate(`Normalized Area` = as.double(`Normalized Area`)) |> 
-  mutate(`Normalized Area` = replace_na(`Normalized Area`, 0))
+  mutate(`Normalized Area` = replace_na(`Normalized Area`, 0)) |> # Replace missing values in the Response_factor column with 0
+  mutate(Area = replace_na(Area, 0)) |>
+  mutate(RatioQuanToQual = as.double(RatioQuanToQual)) |> #--< convert to double #-->
+  mutate(RatioQualToQuan = as.double(RatioQualToQuan)) #--< convert to double #-->
 
-# Replace missing values in the Response_factor column with 0
-TESTING <- TESTING |> 
-         mutate(`Normalized Area` = ifelse(is.na(`Normalized Area`), 0, `Normalized Area`))  # Replace NAs with 0
 
-# Function to create molecule names
-create_molecule_name <- function(i, j) {
-  molecule_name <- paste0("C", i, "H", (2 * i) + 2 - j, "Cl", j)
-  return(molecule_name)
-}
+
 
 # Create an empty list to store plots and calibration results
 plotsA <- list()
@@ -91,6 +99,10 @@ calibration_resultsA <- data.frame(STD_code = character(),
                                    Intercept = numeric(),
                                    R_squared = numeric(),
                                    stringsAsFactors = FALSE)
+
+
+# molecule_name <- unique(TESTING$Molecule)
+
 
 # Define the range of i and j
 i_values <- 10:13
@@ -144,7 +156,7 @@ for (i in i_values) {
                                                Chain_length = paste("C",i),
                                                Type = type,
                                                Homologue = molecule_name,
-                                               Response_factor = round(slopeA),
+                                               Response_factor = round(slopeA, 1),
                                                Intercept = interceptA,
                                                R_squared = R_squaredA))
       
@@ -180,19 +192,6 @@ calibration_curves_gridA
 
 
 ########################### STANDARDS B #####################################################################################
-
-
-
-# Replace missing values in the Response_factor column with 0
-TESTING <- TESTING |> 
-  mutate(`Normalized Area` = replace_na(`Normalized Area`, 0)) 
-
-# Function to create molecule names
-create_molecule_name <- function(i, j) {
-  molecule_name <- paste0("C", i, "H", (2 * i) + 2 - j, "Cl", j)
-  return(molecule_name)
-}
-
 # Create an empty list to store plots and calibration results
 plotsB <- list()
 calibration_resultsB <- data.frame(STD_code = character(),
@@ -292,7 +291,7 @@ for (i in 2:length(plotsB)) {
 calibration_curves_gridB
 
 
-########################### COMBINE STNADARDS A AND B ######################################################################
+########################### COMBINE STANDARDS A AND B ######################################################################
 
 combined_df <- rbind(calibration_resultsA, calibration_resultsB)
 
@@ -339,7 +338,7 @@ list_of_samples <- split(TESTINGB, TESTINGB$`Replicate Name`)
 #####GROUP STANDARD MIXTURES USED#####
 
 #####Set working directory#####
-working.directory <- "F:/LINKOPING/Manuscripts/Skyline/Skyline/"
+#working.directory <- "F:/LINKOPING/Manuscripts/Skyline/Skyline/"
 
 ##########################################PREPARE DATASET FOR PATTERN RECONSTRUCTION#################
 {
@@ -354,6 +353,7 @@ working.directory <- "F:/LINKOPING/Manuscripts/Skyline/Skyline/"
   input <- input |> 
     group_by(Reference_standard) |> 
     mutate(Sum_response_factor = sum(Response_factor, na.rm = TRUE))
+  
   input[1:5] <- lapply(input[1:5], as.factor)
   input$Response_factor[is.na(input$Response_factor)] <- 0
 }
@@ -369,7 +369,7 @@ all_plots <- list()
 unique_sample_names <- unique(TESTINGB$`Replicate Name`)
 
 # Iterate over each unique sample name
-for (sample_name in unique_sample_names) {
+for (sample_name in 1:length(unique_sample_names)) {
   # Get the corresponding sample data frame, now I will use sample_df for further procesing
   sample_df <- list_of_samples[[sample_name]]
   
@@ -515,7 +515,7 @@ all_plots[["NIST_R3"]]
 
 ########################### STANDARDS A #############################################################
 # Load the file
-TESTING <- read_excel("F:/LINKOPING/Manuscripts/Skyline/Skyline/OrbitrapDust.xlsx") |>
+TESTING <- read_excel("./data/OrbitrapDust.xlsx") |>
   mutate(`Analyte Concentration` = as.numeric(`Analyte Concentration`)) 
 
 # Replace missing values in the Response_factor column with 0
@@ -741,7 +741,7 @@ for (i in 2:length(plotsB)) {
 calibration_curves_gridB
 
 
-########################### COMBINE STNADARDS A AND B ######################################################################
+########################### COMBINE STANDARDS A AND B ######################################################################
 
 combined_df <- rbind(calibration_resultsA, calibration_resultsB)
 
@@ -788,7 +788,7 @@ list_of_samples <- split(TESTINGB, TESTINGB$`Replicate Name`)
 #####GROUP STANDARD MIXTURES USED#####
 
 #####Set working directory#####
-working.directory <- "F:/LINKOPING/Manuscripts/Skyline/Skyline/"
+#working.directory <- "F:/LINKOPING/Manuscripts/Skyline/Skyline/"
 
 ##########################################PREPARE DATASET FOR PATTERN RECONSTRUCTION#################
 {
@@ -818,7 +818,7 @@ all_plots <- list()
 unique_sample_names <- unique(TESTINGB$`Replicate Name`)
 
 # Iterate over each unique sample name
-for (sample_name in unique_sample_names) {
+for (sample_name in 1:length(unique_sample_names)) {
   # Get the corresponding sample data frame, now I will use sample_df for further procesing
   sample_df <- list_of_samples[[sample_name]]
   
