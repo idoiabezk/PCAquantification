@@ -45,7 +45,10 @@ CPs_standards <- Skyline_output |>
   mutate(slope = map(coef, pluck("`Analyte Concentration`"))) |> 
   mutate(intercept = map(coef, pluck("(Intercept)"))) |> 
   mutate(rsquared = map(models, summary)) |> 
-  mutate(rsquared = map(rsquared, pluck("r.squared"))) 
+  mutate(rsquared = map(rsquared, pluck("r.squared"))) |> 
+  select(-coef) # remove coef variable since it has already been plucked
+
+  #filter(rsquared > 0.7) #cannot do this as some are still false positive and need to replace formula later with 0 for nnls 
 
 # NEED TO ADD using case_when or elseif..
 # if (sum(!is.na(filtered_dataA$`Normalized Area`)) == 0 || sum(!is.na(filtered_dataA$`Analyte Concentration`)) == 0) {
@@ -64,7 +67,7 @@ CPs_standards <- Skyline_output |>
 
 
 
-----TEST SCRIPTS-----
+----JUST SOME TEST SCRIPTS-----
 
 
 ## test using Bogdal paper Figure 1
