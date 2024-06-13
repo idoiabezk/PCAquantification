@@ -310,38 +310,6 @@ combined_df <- rbind(calibration_resultsA, calibration_resultsB)
 ```
 
 
-THANH TEST SCCP Standards
-```{r}
-
-Cal_A <- read_excel("./data/OrbitrapDust.xlsx") |>
-  mutate(`Analyte Concentration` = as.numeric(`Analyte Concentration`)) |> 
-  mutate(`Normalized Area` = as.numeric(`Normalized Area`)) |> 
-  mutate(`Normalized Area` = replace_na(`Normalized Area`, 0)) |> # Replace missing values in the Response_factor column with 0
-  mutate(Area = replace_na(Area, 0)) |>
-  mutate(RatioQuanToQual = as.numeric(RatioQuanToQual)) |> #--< convert to numeric #-->
-  mutate(RatioQualToQuan = as.numeric(RatioQualToQuan)) #--< convert to numeric #-->
-
-
-Cal_A_group <- Cal_A |>
-  filter(`Isotope Label Type` == "Quan")|>
-  filter(`Sample Type` == "Standard") |> 
-  filter(str_detect(Molecule, "C9", negate = TRUE))|>#Exclude the calibration vSCCPs
-  filter(str_detect(Molecule, "C14", negate = TRUE))|>#Exclude the calibration MCCPs
-  filter(str_detect(Molecule, "C15", negate = TRUE))|>#Exclude the calibration MCCPs
-  filter(str_detect(Molecule, "C16", negate = TRUE))|>#Exclude the calibration MCCPs
-  filter(str_detect(Molecule, "C17", negate = TRUE)) |>#Exclude the calibration MCCPs
-  filter(str_detect(Molecule, "IS", negate = TRUE)) |> #Exclude the calibration IS
-  filter(str_detect(Molecule, "RS", negate = TRUE)) |> #Exclude the calibration RS
-  drop_na(Note) |> 
-  group_by(Note, Molecule) |> 
-  nest() |> 
-  mutate(models = map(data, ~lm(`Normalized Area` ~ `Analyte Concentration`, data = .x)))  |> 
-  mutate()
-  
-
-      
-```
-
 
 PREPARE THE SAMPLES FOR CALIBRATION
 ```{r}
@@ -404,7 +372,7 @@ CALIBRATION
   
   # Store sum RFs for each group CP standard
   input <- input |> 
-    group_by(Reference_standard) |> 
+    group_by(STD_code, Chain_length) |> 
     mutate(Sum_response_factor = sum(Response_factor, na.rm = TRUE))
   
   input[1:5] <- lapply(input[1:5], as.factor)
@@ -454,17 +422,17 @@ for (sample_name in unique_sample_names) {
   
   # Deconvolution of homologue patterns (adjust your loop accordingly)
   REF <- sample_df$Relative_distribution
-  Distance <- 100
+  Distance <- 100 
   
   for (z in 1:length(Combinations[1,])) {
-    C_1 <- subset(input, subset = (STD_code == Combinations[1, z]))
+    C_1 <- subset(input, subset = (STD_code == Combinations[1, z])) #input is the standards
     C_2 <- subset(input, subset = (STD_code == Combinations[2, z]))
     
     for (j in 1:100) {
       Combo <- (C_1$Response_factor * j + C_2$Response_factor * (100 - j)) / sum((C_1$Response_factor * j + C_2$Response_factor * (100 - j)), na.rm = TRUE)
-      
+      print(paste0(sample_name, Distance))
       # Check for NA values in REF or Combo before comparison
-      if (!any(is.na(REF)) && !any(is.na(Combo)) && Distance > (sum(sqrt((REF - Combo)^2)))) {
+      if (!any(is.na(REF)) && !any(is.na(Combo)) && Distance > (sum(sqrt((REF - Combo)^2)))) { #below script activates when Distance > sumofsqrREF-Combo 
         results$Comp_1 <- as.character(C_1$STD_code)
         results$Comp_2 <- as.character(C_2$STD_code)
         results$Fraction_Comp_1 <- j
@@ -551,3 +519,36 @@ for (sample_name in unique_sample_names) {
 }
 ```
 
+
+
+THANH TEST SCCP Standards
+```{r}
+
+Cal_A <- read_excel("./data/OrbitrapDust.xlsx") |>
+  mutate(`Analyte Concentration` = as.numeric(`Analyte Concentration`)) |> 
+  mutate(`Normalized Area` = as.numeric(`Normalized Area`)) |> 
+  mutate(`Normalized Area` = replace_na(`Normalized Area`, 0)) |> # Replace missing values in the Response_factor column with 0
+  mutate(Area = replace_na(Area, 0)) |>
+  mutate(RatioQuanToQual = as.numeric(RatioQuanToQual)) |> #--< convert to numeric #-->
+  mutate(RatioQualToQuan = as.numeric(RatioQualToQuan)) #--< convert to numeric #-->
+
+
+Cal_A_group <- Cal_A |>
+  filter(`Isotope Label Type` == "Quan")|>
+  filter(`Sample Type` == "Standard") |> 
+  filter(str_detect(Molecule, "C9", negate = TRUE))|>#Exclude the calibration vSCCPs
+  filter(str_detect(Molecule, "C14", negate = TRUE))|>#Exclude the calibration MCCPs
+  filter(str_detect(Molecule, "C15", negate = TRUE))|>#Exclude the calibration MCCPs
+  filter(str_detect(Molecule, "C16", negate = TRUE))|>#Exclude the calibration MCCPs
+  filter(str_detect(Molecule, "C17", negate = TRUE)) |>#Exclude the calibration MCCPs
+  filter(str_detect(Molecule, "IS", negate = TRUE)) |> #Exclude the calibration IS
+  filter(str_detect(Molecule, "RS", negate = TRUE)) |> #Exclude the calibration RS
+  drop_na(Note) |> 
+  group_by(Note, Molecule) |> 
+  nest() |> 
+  mutate(models = map(data, ~lm(`Normalized Area` ~ `Analyte Concentration`, data = .x)))  |> 
+  mutate()
+  
+
+      
+```

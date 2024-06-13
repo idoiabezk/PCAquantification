@@ -38,6 +38,7 @@ TESTING <- TESTING |>
 #############################################################################################################
 
 #Filter data for 
+# SCCPs
 filtered_dataA <- TESTING |>
   filter(`Sample Type` == "Standard") |> #Remove the samples etc. and only take the calibration std
   filter(`Isotope Label Type` == "Quan") |>  #Remove the qual ions
@@ -50,7 +51,7 @@ filtered_dataA <- TESTING |>
   filter(str_detect(Molecule, "IS", negate = TRUE)) |> #Exclude the calibration IS
   filter(str_detect(Molecule, "RS", negate = TRUE)) #Exclude the calibration RS
 
-
+#MCCPs
 filtered_dataB <- TESTING |>
   filter(`Sample Type` == "Standard") |> #Remove the samples etc. and only take the calibration std
   filter(`Isotope Label Type` == "Quan") |>  #Remove the qual ions
@@ -209,7 +210,7 @@ list_of_samples <- split(TESTINGB, TESTINGB$`Replicate Name`)
     group_by(Reference_standard) |> 
     mutate(Sum_response_factor = sum(Response_factor, na.rm = TRUE))
   input[c(1:5)] <- lapply(input[c(1:5)], as.factor) 
-  input$Response_factor[is.na(input$Response_factor)] <- 0
+  input$Response_factor[is.na(input$Response_factor)] <- 0 #TW!this should probably go higher up before the mutate(Sum_response_factor)
 }
 
 
@@ -224,7 +225,7 @@ all_plots <- list()
 unique_sample_names <- unique(TESTINGB$`Replicate Name`)
 
 # Iterate over each unique sample name
-for (sample_name in 1:length(unique_sample_names)) {
+for (sample_name in unique_sample_names) { #TW! This is a long loop..
   # Get the corresponding sample data frame, now I will use sample_df for further procesing
   sample_df <- list_of_samples[[sample_name]]
   
@@ -248,7 +249,7 @@ for (sample_name in 1:length(unique_sample_names)) {
   unique_sample_names <- unique(TESTINGB$`Replicate Name`)
   
   # Iterate over each unique sample name
-  for (sample_name in 1:length(unique_sample_names)) {
+  for (sample_name in unique_sample_names) {
     # Get the corresponding sample data frame, now I will use sample_df for further procesing
     sample_df <- list_of_samples[[sample_name]]
     
@@ -262,7 +263,7 @@ for (sample_name in 1:length(unique_sample_names)) {
         Type = as.factor(Type),
         Chain_length = as.factor(Chain_length),
         `Normalized Area` = as.numeric(`Normalized Area`),
-        Relative_distribution = `Normalized Area` / sum(`Normalized Area`, na.rm = TRUE)
+        Relative_distribution = `Normalized Area` / sum(`Normalized Area`, na.rm = TRUE) #TW!Why is this calculated and then below line put as NA
       )
     
     # Calculate relative 'Normalized Area' distribution within each homologue group
@@ -289,13 +290,16 @@ for (sample_name in 1:length(unique_sample_names)) {
       
       for (z in 1:length(Combinations[1, ])) { 
         
-        C_1 <- subset(input, subset = (STD_code == Combinations[1, z] & Type == sample_df$Type[i]))
-        C_2 <- subset(input, subset = (STD_code == Combinations[2, z] & Type == sample_df$Type[i]))
+        C_1 <- subset(input, subset = (STD_code == Combinations[1, z] & Type == sample_df$Type[i])) #TW! There is no combo of SCCPs and MCCP code and type
+        C_2 <- subset(input, subset = (STD_code == Combinations[2, z] & Type == sample_df$Type[i])) #TW! There is no combo of SCCPs and MCCP code and type
+        
+        #C_1 <- subset(input, subset = (STD_code == Combinations[1, z]))
+        #C_2 <- subset(input, subset = (STD_code == Combinations[2, z]))
         
         for (j in 1:100) {
           Combo <- (C_1$Response_factor * j + C_2$Response_factor * (100 - j)) / sum((C_1$Response_factor * j + C_2$Response_factor * (100 - j)), na.rm = TRUE)
           
-          if (Distance > sum(sqrt((REF - Combo)^2))) {
+          if (!any(is.na(REF)) && !any(is.na(Combo)) && Distance > (sum(sqrt((REF - Combo)^2)))) {
             results$Comp_1[results$Type == levels(sample_df$Type)[i]] <- as.character(C_1$STD_code)
             results$Comp_2[results$Type == levels(sample_df$Type)[i]] <- as.character(C_2$STD_code)
             results$Fraction_Comp_1[results$Type == levels(sample_df$Type)[i]] <- j
