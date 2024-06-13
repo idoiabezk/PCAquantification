@@ -104,6 +104,8 @@ combined_sample <- combined$Relative_distribution
 # Using the non-negative least squares, nnls, package to deconvolute the distribution
 deconv <- nnls(combined_matrix, combined_sample)
 
+deconv
+
 deconv_coef <- deconv$x
 
 deconv_resolved <- deconv[["fitted"]]
@@ -140,13 +142,14 @@ coefficients <- deconv$x
 resolved <- c(y1*deconv$x[1]+y2*deconv$x[2]+y3*deconv$x[3])
 resolved2 <- deconv[["fitted"]]
 
-chisq.test(CPs_deconv_resolved, p = CPs_combine_sample, rescale.p = TRUE)
+chisq.test(resolved, p = s, rescale.p = TRUE)
 qchisq(.5, df = 3)
-
 
 reconstructed_pattern <- rowSums(Y%*%coefficients)
 
-
+par(mfrow = c(2,1))
+barplot(s)
+barplot(reconstructed_pattern)
 
 
 ```
