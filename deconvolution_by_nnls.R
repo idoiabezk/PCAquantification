@@ -6,7 +6,9 @@ editor_options:
 ---
   
   
- 
+
+
+
 library(nnls)
 library(tidyverse)
 library(tidymodels)
@@ -29,7 +31,7 @@ library(readxl)
 ##############
 
 # reading data from excel
-Skyline_output <- read_excel("./data/OrbitrapDust.xlsx") |>
+Skyline_output <- read_excel("F:/LINKOPING/Manuscripts/Skyline/Skyline/OrbitrapDust.xlsx") |>
   mutate(`Analyte Concentration` = as.numeric(`Analyte Concentration`)) |> 
   mutate(`Normalized Area` = as.numeric(`Normalized Area`)) |> 
   mutate(`Normalized Area` = replace_na(`Normalized Area`, 0)) |> # Replace missing values in the Response_factor column with 0
@@ -81,7 +83,7 @@ CPs_samples <- Skyline_output |>
 
 CPs_samples_individual <- CPs_samples |> 
   filter(`Replicate Name` == "NIST_R1") |> 
-  select(Molecule, Relative_distribution)
+  select(Molecule, `Normalized Area`, Relative_distribution)
 
 
 CPs_standards_input <- CPs_standards |> 
@@ -116,6 +118,31 @@ chisq.test(deconv_resolved, p = combined_sample, rescale.p = TRUE)
 par(mfrow = c(2,1))
 barplot(combined_sample, main = "Sample")
 barplot(deconv_reconst, main = "Reconstructed")
+
+
+
+########### CONCENTRATION IN ng/uL
+
+CPs_standards <- CPs_standards|>
+  mutate(Standard_response = CPs_standards$Response_factor * deconv_coef) #Calculate the concentration in the standards
+  
+Standard_response <- sum(CPs_standards$Response_factor) #Sum the concentration of the homologues
+SumResponse <- sum(CPs_samples_individual$`Normalized Area`) #Sum the signal of the homologues in the sample
+SumConcentration <- SumResponse/Standard_response #Calculate the sum concentration in the sample
+
+CPs_samples_individual <- CPs_samples_individual |> 
+  mutate(Concentration = SumConcentration* Relative_distribution) #Calculate the concentration of each homologue in the sample
+  
+ 
+
+
+
+
+
+
+
+
+
 
 
 
