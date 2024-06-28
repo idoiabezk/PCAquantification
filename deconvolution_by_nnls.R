@@ -1,0 +1,283 @@
+---
+  title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+  
+  
+ 
+library(nnls)
+library(tidyverse)
+library(tidymodels)
+library(readxl)
+
+
+
+
+## Setup automatic nnls deconvolution process from excel sheet
+
+
+#### TODO ####
+#filter(rsquared > 0.7) #cannot do this as some are still false positive and need to replace formula later with 0 for nnls 
+
+# NEED TO ADD using case_when or elseif..
+# if (sum(!is.na(filtered_dataA$`Normalized Area`)) == 0 || sum(!is.na(filtered_dataA$`Analyte Concentration`)) == 0) {
+#       cat("No valid cases for fitting the model for molecule:", molecule_name, "\n")
+# OR add a filter to remove those rsquared that are very low (perhaps below 0.7?)  
+
+##############
+
+# reading data from excel
+Skyline_output <- read_excel("./data/OrbitrapDust.xlsx") |>
+  mutate(`Analyte Concentration` = as.numeric(`Analyte Concentration`)) |> 
+  mutate(`Normalized Area` = as.numeric(`Normalized Area`)) |> 
+  mutate(`Normalized Area` = replace_na(`Normalized Area`, 0)) |> # Replace missing values in the Response_factor column with 0
+  mutate(Area = replace_na(Area, 0)) |>
+  mutate(RatioQuanToQual = as.numeric(RatioQuanToQual)) |> #--< convert to numeric #-->
+  mutate(RatioQualToQuan = as.numeric(RatioQualToQuan)) #--< convert to numeric #-->
+
+
+#This is currently filtered for C10-C13 only to compare with the Perkons script. Will remove later or add as an argument in function
+CPs_standards <- Skyline_output |> 
+  filter(`Sample Type` == "Standard",
+         Molecule != "IS",
+         Molecule != "RS",
+         `Isotope Label Type` == "Quan",
+         Note != "NA") |> 
+  group_by(Note, Molecule) |>
+  mutate(rel_int = `Normalized Area`/sum(`Normalized Area`)) |> #why ius it needed? Maybe can be removed
+  nest() |> 
+  mutate(models = map(data, ~lm(`Normalized Area` ~ `Analyte Concentration`, data = .x))) |> 
+  mutate(coef = map(models, coef)) |> 
+  mutate(Response_factor = map(coef, pluck("`Analyte Concentration`"))) |> 
+  mutate(intercept = map(coef, pluck("(Intercept)"))) |> 
+  mutate(rsquared = map(models, summary)) |> 
+  mutate(rsquared = map(rsquared, pluck("r.squared"))) |>
+  select(-coef) |>  # remove coef variable since it has already been plucked
+  unnest(c(Response_factor, intercept, rsquared)) |>  #removing the list type for these variables
+  mutate(Response_factor = if_else(Response_factor < 0, 0, Response_factor)) |> # replace negative RF with 0
+  mutate(rsquared = ifelse(is.nan(rsquared), 0, rsquared)) |> 
+  mutate(Chain_length = paste0("C", str_extract(Molecule, "(?<=C)[^H]+"))) |> 
+  filter(Chain_length == "C10" | Chain_length == "C11" | Chain_length == "C12" | Chain_length == "C13") |> #this will be remove later or added as arg in fn
+  ungroup() |> 
+  group_by(Note, Chain_length) |> 
+  mutate(Sum_response_factor_chainlength = sum(Response_factor, na.rm = TRUE)) |> 
+  ungroup()
+
+
+
+CPs_samples <- Skyline_output |> 
+  filter(`Sample Type` == "Unknown",
+         Molecule != "IS",
+         Molecule != "RS",
+         `Isotope Label Type` == "Quan") |> 
+  mutate(Chain_length = paste0("C", str_extract(Molecule, "(?<=C)[^H]+"))) |> 
+  filter(Chain_length == "C10" | Chain_length == "C11" | Chain_length == "C12" | Chain_length == "C13") |> #this will be remove later or added as arg in fn
+  group_by(`Replicate Name`) |> 
+  mutate(Relative_distribution = `Normalized Area` / sum(`Normalized Area`, na.rm = TRUE)) |> 
+  ungroup() |> 
+  mutate(across(Relative_distribution, ~replace(., is.nan(.), 0))) #replace NaN with zero
+
+CPs_samples_individual <- CPs_samples |> 
+  filter(`Replicate Name` == "NIST_R1") |> 
+  select(Molecule, Relative_distribution)
+
+
+CPs_standards_input <- CPs_standards |> 
+  select(Molecule, Note, Response_factor) |> 
+  pivot_wider(names_from = "Note", values_from = "Response_factor")
+
+
+# This step ensures that all values are corresponding to the same molecule for std and sample        
+combined <- CPs_samples_individual |> 
+  right_join(CPs_standards_input, by = "Molecule")
+
+combined_matrix <- combined |> 
+  select(-Molecule, -Relative_distribution) |> 
+  as.matrix()
+
+combined_sample <- combined$Relative_distribution
+
+# Using the non-negative least squares, nnls, package to deconvolute the distribution
+deconv <- nnls(combined_matrix, combined_sample)
+
+deconv
+
+deconv_coef <- deconv$x
+
+deconv_resolved <- deconv[["fitted"]]
+
+deconv_reconst <- rowSums(combined_matrix %*% deconv_coef)
+
+chisq.test(deconv_resolved, p = combined_sample, rescale.p = TRUE)
+
+
+par(mfrow = c(2,1))
+barplot(combined_sample, main = "Sample")
+barplot(deconv_reconst, main = "Reconstructed")
+
+
+
+
+
+
+#----JUST SOME TEST SCRIPTS-----
+  
+  
+  ## test using Bogdal paper Figure 1
+
+
+s <- c(0.1, 0.4, 0.4, 0.1)
+y1 <- c(0.1, 0.4, 0.3, 0.2)
+y2 <- c(0.5, 0.1, 0.2, 0.2)
+y3 <- c(0.2, 0.4, 0.4, 0)
+Y <- cbind(y1, y2, y3)
+deconv <- nnls(Y, s)
+deconv
+coefficients <- deconv$x
+resolved <- c(y1*deconv$x[1]+y2*deconv$x[2]+y3*deconv$x[3])
+resolved2 <- deconv[["fitted"]]
+
+chisq.test(resolved, p = s, rescale.p = TRUE)
+qchisq(.5, df = 3)
+
+reconstructed_pattern <- rowSums(Y%*%coefficients)
+
+par(mfrow = c(2,1))
+barplot(s)
+barplot(reconstructed_pattern)
+
+
+
+
+## Test using data from Gao et al std 57, 61, 63 and sample 74
+
+y1 <- c(0,0,0.00890544,0.021319085,0.019430052,0.023855786,0,0.003022453,0.064173143,0.143404577,0.087543178,0.028875216,0,0.003562176,0.048197323,0.146265112,0.13800734,0.04015544,0,0.007016408,0.022398532,0.074805699,0.096556563,0.022506477)
+y2<- c(0,	0.000420628,	0.014890216,0.020947253,0.019432994,0.016488601,0,0.015394969,0.091192059,0.125094641,0.070665433,0.022798015,0,0.014385463,0.083789013,0.143097501,0.103053756,0.028182048,0.001009506,0.012450576,0.041389754,0.081854126,0.07596534,0.017498107)
+y3 <- c(0,0,0.009719222,0.020347846,0.018983744,0.024155962,0,0.002671365,0.05632602,0.137944754,0.08821189,0.029726043,0,0.001648289,0.039047403,0.140729794,0.139365693,0.045413209,0.007332045,0,0.017051267,0.071331136,0.106172559,0.043821757)
+A <- as.matrix(cbind(y1,y2, y3))
+
+s <- c(0,0.002484031,0.038549451,0.128585146,0.133542771,0.066473928,0,0.00241619,0.024986432,0.101563478,0.147058824,0.072579635,0.000741035,0.005437732,0.01244103,0.027548741,0.041403999,0.023180812,0.003846074,0.011256419,0.031332192,0.043131341,0.047916754,0.033523984)
+
+a <- nnls(A,s)
+a
+coefficients <- a$x
+resolved <- c(y1*a[["x"]][1] + y2*a[["x"]][2] + y3*a[["x"]][3])
+chisq.test(resolved, p = s, rescale.p = TRUE)
+
+sresolved <- cbind(s, resolved)
+chisq.test(sresolved)
+
+
+
+
+## test tidymodels 
+
+library(RcppML)
+library(Matrix)
+
+data(biomass, package = "modeldata")
+
+rec <- recipe(HHV ~ ., data = biomass) %>%
+  update_role(sample, new_role = "id var") %>%
+  update_role(dataset, new_role = "split variable") %>%
+  step_nnmf_sparse(
+    all_numeric_predictors(),
+    num_comp = 2,
+    seed = 473,
+    penalty = 0.01
+  ) %>%
+  prep(training = biomass)
+
+bake(rec, new_data = NULL)
+
+
+bake(rec, new_data = NULL) %>%
+  ggplot(aes(x = NNMF2, y = NNMF1, col = HHV)) +
+  geom_point()
+
+
+
+
+
+glmnet
+
+
+library(glmnet)
+mod2 <- glmnet(x, y, lambda = 0, lower.limits = 0, intercept = FALSE)
+coef(mod2)
+
+
+
+
+#Neural network
+
+
+library(tidymodels)
+library(brulee)
+
+# Example data (replace with your own)
+# Create synthetic data for illustration
+set.seed(123)
+n_obs <- 100
+n_features <- 5
+
+# Generate random features
+features <- matrix(rnorm(n_obs * n_features), nrow = n_obs)
+
+# Create response variable (classification example)
+response <- sample(c("A", "B", "C"), size = n_obs, replace = TRUE)
+
+# Combine features and response into data frames
+cls_train <- data.frame(features, class = response)
+cls_val <- data.frame(features, class = sample(c("A", "B", "C"), size = n_obs, replace = TRUE))
+
+# Check the structure of cls_train and cls_val
+str(cls_train)
+str(cls_val)
+
+# Create a recipe
+biv_rec <- recipe(class ~ ., data = cls_train) %>%
+  step_normalize(all_predictors())
+
+# Specify the neural network model
+nnet_spec <- mlp(epochs = 1000, hidden_units = 10, penalty = 0.01, learn_rate = 0.1) %>%
+  set_engine("brulee", validation = 0) %>%
+  set_mode("classification")
+
+# Create a workflow
+nnet_wflow <- biv_rec %>% workflow(nnet_spec)
+
+# Fit the model
+set.seed(987)
+nnet_fit <- fit(nnet_wflow, cls_train)
+
+
+
+
+
+
+
+
+# Install and load the nnls package (if not already installed)
+# install.packages("nnls")
+library(nnls)
+
+# Example vectors
+a <- c(1, 2, 3)
+b <- c(3, 2, 1)
+target_vector <- c(4, 5, 6)  # The vector you want to express
+
+# Create a matrix from vectors a and b
+ab_matrix <- matrix(c(a, b), nrow = length(a))
+
+# Solve for coefficients
+coefficients <- nnls(A = ab_matrix, b = target_vector)$x
+
+# Print the coefficients
+print(coefficients)
+
+reconstr <- rowSums(coefficients*ab_matrix)
+
+
