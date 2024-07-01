@@ -290,10 +290,13 @@ reorganized_data <- t(reorganized_data) #transpose
 #Make the first row (replicate names) the column names
 colnames(reorganized_data) <- reorganized_data[1, ]
 Samples_Concentration <- reorganized_data[-1, ]
+# Convert the result back to a data frame
+Samples_Concentration <- as.data.frame(Samples_Concentration)
+Samples_Concentration<- Samples_Concentration |> 
+  mutate(Molecule = CPs_samples_input$Molecule)|> 
+  relocate(Molecule, .before = everything()) 
 
-
-###################SAVE RESULTS: it doesn't work
-
+###################SAVE RESULTS
 
 # Specify the file path where you want to save the Excel file
 excel_file <- "F:/LINKOPING/Manuscripts/Skyline/Skyline/Samples_Concentration.xlsx"
