@@ -93,7 +93,7 @@ combined <- CPs_samples_input |>
   right_join(CPs_standards_input, by = "Molecule")
 
 
-#########################################################################################################################################################################
+############################################################################### DECONVOLUTION #############################################################################
 
 # Ensure combined_matrix is correctly defined as a matrix prior to the deconvolution
 combined_matrix <- CPs_standards_input  |> 
@@ -163,11 +163,7 @@ deconv_coef_df <- Deconvolution  |>
 print(deconv_coef_df)
 
 
-
-
-############################
-# calculate the concentration in ng/uL
-###############################
+########################################################## Calculate the concentration in ng/uL ###############################################################
 
 #Remove the replicate name to generate vectors:
 deconv_coef_df_matrix<- deconv_coef_df |> 
@@ -265,7 +261,7 @@ for (i in 1:nrow(final_df_matrix)) {
 print(total_sums_df)
 
 
-###################################################FINAL RESULTS
+################################################### FINAL RESULTS ####################################################################
 CPs_samples<-CPs_samples |> 
 rename(`Replicate.Name` = `Replicate Name`)
 
@@ -296,7 +292,7 @@ Samples_Concentration<- Samples_Concentration |>
   mutate(Molecule = CPs_samples_input$Molecule)|> 
   relocate(Molecule, .before = everything()) 
 
-###################SAVE RESULTS
+######################################################### SAVE RESULTS ###################################################################
 
 # Specify the file path where you want to save the Excel file
 excel_file <- "F:/LINKOPING/Manuscripts/Skyline/Skyline/Samples_Concentration.xlsx"
@@ -306,9 +302,6 @@ write.xlsx(Samples_Concentration, excel_file, rowNames = FALSE)
 
 # Confirm message that the file has been saved
 cat("Excel file saved:", excel_file, "\n")
-
-
-
 
 
 
