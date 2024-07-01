@@ -4,16 +4,13 @@ output: html_notebook
 editor_options: 
   chunk_output_type: console
 ---
-  
-  
 
-
-
+    
 library(nnls)
 library(tidyverse)
 library(tidymodels)
 library(readxl)
-
+library(openxlsx)
 
 
 
@@ -83,12 +80,6 @@ CPs_samples <- Skyline_output |>
   #nest() |> 
   ungroup() 
 
-################################### CHANGE SO IT TAKES ALL THE SAMPLES###################################
-#CPs_samples_individual <- CPs_samples |> 
-  #filter(`Replicate Name` == "NIST_R1") |> 
-  #select(Molecule, `Normalized Area`, Relative_distribution)
-#############################################################################################
-
 CPs_standards_input <- CPs_standards |> 
   select(Molecule, Note, Response_factor) |> 
   pivot_wider(names_from = "Note", values_from = "Response_factor")
@@ -101,79 +92,22 @@ CPs_samples_input <- CPs_samples |>
 combined <- CPs_samples_input |> 
   right_join(CPs_standards_input, by = "Molecule")
 
-combined_matrix <- CPs_standards_input |> 
-  select(-Molecule) |> 
-  as.matrix()
-
-combined_sample <- CPs_samples |> 
-  group_by(`Replicate Name`) |> 
-  select(-Molecule, -`Normalized Area`) |> 
-  nest() |> 
-  ungroup() 
-
-#combined_sample_list <- combined_sample |> 
-  #mutate(data = map(data, as.data.frame)) |> 
-  #pull(data)
-
-# Using the non-negative least squares, nnls, package to deconvolute the distribution
-
-  
-#perform_deconvolution<- function(combined_matrix, combined_sample){
-#deconv <- nnls(combined_matrix, combined_sample)
-
-#deconv
-
-#deconv_coef <- deconv$x
-
-#deconv_resolved <- deconv[["fitted"]]
-
-#deconv_reconst <- rowSums(combined_matrix %*% deconv_coef)
-
-#chisq.test(deconv_resolved, p = combined_sample, rescale.p = TRUE)
-#}
-
-#Deconvolution <- combined_sample |> 
- #mutate(combined_sample = map(data, ~ perform_deconvolution(combined_matrix, combined_sample)))
-
-
-
-#Plot the concentration together with the patterns to see if it is ok
-par(mfrow = c(3,1))
-barplot(combined_sample, main = "Sample")
-barplot(deconv_reconst, main = "Reconstructed")
-barplot(CPs_samples_individual$Concentration, main = "Sample concentration ng/uL")#Plot the concentration
-
-
-########### CONCENTRATION IN ng/uL
-
-CPs_standards <- CPs_standards|>
-  mutate(Standard_response = CPs_standards$Response_factor * deconv_coef) #Calculate the concentration in the standards
-
-Standard_response <- sum(CPs_standards$Response_factor) #Sum the concentration of the homologues
-SumResponse <- sum(CPs_samples_individual$`Normalized Area`) #Sum the signal of the homologues in the sample
-SumConcentration <- SumResponse/Standard_response #Calculate the sum concentration in the sample
-
-CPs_samples_individual <- CPs_samples_individual |> 
-  mutate(Concentration = SumConcentration* Relative_distribution) #Calculate the concentration of each homologue in the sample
 
 #########################################################################################################################################################################
 
-###############################here from the aid
-
-
-# Ensure combined_matrix is correctly defined as a matrix
-combined_matrix <- CPs_standards_input %>%
-  select(-Molecule) %>%
+# Ensure combined_matrix is correctly defined as a matrix prior to the deconvolution
+combined_matrix <- CPs_standards_input  |> 
+  select(-Molecule) |> 
   as.matrix()
 
-# Ensure combined_sample is correctly defined with nested data frames
-combined_sample <- CPs_samples %>%
-  group_by(`Replicate Name`) %>%
-  select(-Molecule, -`Normalized Area`) %>%
-  nest() %>%
+# Ensure combined_sample is correctly defined with nested data frames prior to the deconvolution
+combined_sample <- CPs_samples  |> 
+  group_by(`Replicate Name`) |> 
+  select(-Molecule, -`Normalized Area`) |> 
+  nest() |> 
   ungroup()
 
-# Function to perform deconvolution on a single data frame
+# Function to perform deconvolution on a single data frame: I have many errors so I included more things but not sure if it is ok, or if I made it more complicated
 perform_deconvolution <- function(df, combined_matrix) {
   df_matrix <- as.matrix(df)
   
@@ -216,59 +150,239 @@ perform_deconvolution <- function(df, combined_matrix) {
 }
 
 # Apply the perform_deconvolution function to each nested data frame
-Deconvolution <- combined_sample %>%
+Deconvolution <- combined_sample  |> 
   mutate(result = map(data, ~ perform_deconvolution(.x, combined_matrix)))
 
 # Extract deconv_coef from results and create a new data frame
-deconv_coef_df <- Deconvolution %>%
-  mutate(deconv_coef = map(result, "deconv_coef")) %>%
-  select(`Replicate Name`, deconv_coef) %>%
+deconv_coef_df <- Deconvolution  |> 
+  mutate(deconv_coef = map(result, "deconv_coef"))  |> 
+  select(`Replicate Name`, deconv_coef)  |> 
   unnest_wider(deconv_coef, names_sep = "_")
 
 # View the result
 print(deconv_coef_df)
 
+
+
+
+############################
 # calculate the concentration in ng/uL
+###############################
 
-deconv_coef_vector<-as.vector(deconv_coef_df[1,]) 
-combined_matrix <- CPs_standards_input  |> 
-  select(-Molecule) 
-combined_matrix<-combined_matrix[1]
-result <- sweep(combined_matrix, 2, deconv_coef_vector, `*`)
-
-deconv_coef_df<-deconv_coef_df |> 
+#Remove the replicate name to generate vectors:
+deconv_coef_df_matrix<- deconv_coef_df |> 
   select(-`Replicate Name`)
-deconv_coef_matrix <- as.matrix(deconv_coef_df)
 
-# Initialize an empty list to store the results
-results <- list()
+# Initialize an empty list to store results
+result_list <- list()
 
-# Perform element-wise multiplication for each row and corresponding column
-for (i in 1:nrow(deconv_coef_matrix)) {
-  deconv_coef_vector <- deconv_coef_matrix[i, ]
-  combined_matrix_column <- combined_matrix[, i]
-  result <- combined_matrix_column * deconv_coef_vector
-  results[[i]] <- result
+# Iterate through each row of deconv_coef_df_matrix
+for (i in 1:nrow(deconv_coef_df_matrix)) {
+  
+  # Extract row vector from deconv_coef_df_matrix
+  deconv_coef_vector <- as.numeric(deconv_coef_df_matrix[i, ])
+  
+  # I had this one before, but to make sure
+  combined_matrix <- CPs_standards_input |> 
+    select(-Molecule)  |> 
+    mutate(across(everything(), as.numeric)) |> 
+    as.matrix()
+  
+  # Perform element-wise multiplication
+  result <- sweep(combined_matrix, 2, deconv_coef_vector, `*`)
+  
+  # Create data frame with column names from CPs_standards_input
+  result_df <- as.data.frame(result)
+  colnames(result_df) <- colnames(CPs_standards_input)[-which(names(CPs_standards_input) == "Molecule")]
+  
+  # Assign name to the result_df from deconv_coef_df
+  replicate_name <- deconv_coef_df$`Replicate Name`[i]
+  
+  # Store result in result_list with the corresponding name
+  result_list[[replicate_name]] <- result_df
 }
-# Convert the list of results to a data frame
-result_df <- do.call(cbind, results)
-Molecule<-CPs_standards_input |> 
-  select(Molecule)
-result_df<- Molecule |> 
-  cross_join(result_df)
 
-##to change: now I need to sum each column, for each sample and then join them:
-Standard_response <- sum(CPs_standards$Response_factor) #Sum the concentration of the homologues
-SumResponse <- sum(CPs_samples_individual$`Normalized Area`) #Sum the signal of the homologues in the sample
-SumConcentration <- SumResponse/Standard_response #Calculate the sum concentration in the sample
+# Print the names of each data frame and their first few rows
+for (name in names(result_list)) {
+  cat("DataFrame Name:", name, "\n")
+  print(head(result_list[[name]]))
+  cat("\n")
+}
 
-CPs_samples_individual <- CPs_samples_individual |> 
-  mutate(Concentration = SumConcentration* Relative_distribution) #Calculate the concentration of each homologue in the sample
+# Combine all data frames into a single data frame with 'Replicate Name'
+final_df <- do.call(rbind, Map(function(df, name) {
+  df$`Replicate Name` <- name
+  df <- df[, c("Replicate Name", setdiff(names(df), "Replicate Name"))]
+  df
+}, result_list, names(result_list)))
+
+# Add CPs_standards_input$Molecule column to final_df
+final_df$Molecule <- CPs_standards_input$Molecule
+
+# Print the final combined data frame
+print(final_df)
+
+
+#Organize the data
+final_df_tidy<-final_df|> 
+  group_by(`Replicate Name`) |> 
+  nest() |> 
+  ungroup()
+
+
+#Total sum the values for each replicate
+
+#Remove the molecule
+final_df_matrix<- final_df |> 
+  select(-Molecule) |> 
+  group_by(`Replicate Name`) |> 
+  nest()
+
+# Initialize an empty data frame to store results
+total_sums_df <- data.frame(
+  `Replicate Name` = character(),
+  `Total Sum` = numeric(),
+  stringsAsFactors = FALSE
+)
+
+# Iterate through each row of final_df_grouped
+for (i in 1:nrow(final_df_matrix)) {
+  # Extract nested data frame
+  nested_df <- final_df_matrix$data[[i]]
+  
+  # Calculate total sum for the current `Replicate Name`
+  `Replicate Name` <- final_df_matrix$`Replicate Name`[[i]]
+  total_sum <- sum(colSums(nested_df[, -1]))  # Exclude the grouping column
+  
+  # Append results to total_sums_df
+  total_sums_df <- rbind(total_sums_df, data.frame(
+    `Replicate Name` = `Replicate Name`,
+    `Total Sum` = total_sum
+  ))
+}
+
+# Print the resulting data frame
+print(total_sums_df)
+
+
+###################################################FINAL RESULTS
+CPs_samples<-CPs_samples |> 
+rename(`Replicate.Name` = `Replicate Name`)
+
+# Merge total_sums_df into CPs_samples based on Replicate Name
+Concentration <- CPs_samples  |> 
+  left_join(total_sums_df, by = "Replicate.Name")  |> 
+  mutate(Concentration = `Relative_distribution` * `Total.Sum`)
+
+print(Concentration)
+Concentration<-Concentration |> 
+  group_by(Replicate.Name) |> 
+  distinct( `Molecule`, Concentration) |> 
+  nest()
+
+# Perform operations to reorganize data
+reorganized_data <- Concentration  |> 
+  unnest() |>  
+  distinct(`Replicate.Name`, `Molecule`, .keep_all = TRUE)  |> 
+  pivot_wider(names_from = `Molecule`, values_from = `Concentration`)
+reorganized_data <- t(reorganized_data) #transpose
+
+#Make the first row (replicate names) the column names
+colnames(reorganized_data) <- reorganized_data[1, ]
+Samples_Concentration <- reorganized_data[-1, ]
+
+
+###################SAVE RESULTS: it doesn't work
+
+
+# Specify the file path where you want to save the Excel file
+excel_file <- "F:/LINKOPING/Manuscripts/Skyline/Skyline/Samples_Concentration.xlsx"
+
+# Write 'Samples_Concentration' to Excel
+write.xlsx(Samples_Concentration, excel_file, rowNames = FALSE)
+
+# Confirm message that the file has been saved
+cat("Excel file saved:", excel_file, "\n")
 
 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+################################### CHANGE SO IT TAKES ALL THE SAMPLES###################################
+#CPs_samples_individual <- CPs_samples |> 
+#filter(`Replicate Name` == "NIST_R1") |> 
+#select(Molecule, `Normalized Area`, Relative_distribution)
+#############################################################################################
+
+#combined_matrix <- CPs_standards_input |> 
+#select(-Molecule) |> 
+#as.matrix()
+
+#combined_sample <- CPs_samples |> 
+# group_by(`Replicate Name`) |> 
+#select(-Molecule, -`Normalized Area`) |> 
+#nest() |> 
+#ungroup() 
+
+#combined_sample_list <- combined_sample |> 
+#mutate(data = map(data, as.data.frame)) |> 
+#pull(data)
+
+# Using the non-negative least squares, nnls, package to deconvolute the distribution
+
+
+#perform_deconvolution<- function(combined_matrix, combined_sample){
+#deconv <- nnls(combined_matrix, combined_sample)
+
+#deconv
+
+#deconv_coef <- deconv$x
+
+#deconv_resolved <- deconv[["fitted"]]
+
+#deconv_reconst <- rowSums(combined_matrix %*% deconv_coef)
+
+#chisq.test(deconv_resolved, p = combined_sample, rescale.p = TRUE)
+#}
+
+#Deconvolution <- combined_sample |> 
+#mutate(combined_sample = map(data, ~ perform_deconvolution(combined_matrix, combined_sample)))
+
+
+
+#Plot the concentration together with the patterns to see if it is ok
+#par(mfrow = c(3,1))
+#barplot(combined_sample, main = "Sample")
+#barplot(deconv_reconst, main = "Reconstructed")
+#barplot(CPs_samples_individual$Concentration, main = "Sample concentration ng/uL")#Plot the concentration
+
+
+########### CONCENTRATION IN ng/uL
+
+#CPs_standards <- CPs_standards|>
+#mutate(Standard_response = CPs_standards$Response_factor * deconv_coef) #Calculate the concentration in the standards
+
+#Standard_response <- sum(CPs_standards$Response_factor) #Sum the concentration of the homologues
+#SumResponse <- sum(CPs_samples_individual$`Normalized Area`) #Sum the signal of the homologues in the sample
+#SumConcentration <- SumResponse/Standard_response #Calculate the sum concentration in the sample
+
+#CPs_samples_individual <- CPs_samples_individual |> 
+# mutate(Concentration = SumConcentration* Relative_distribution) #Calculate the concentration of each homologue in the sample
 
 
 
