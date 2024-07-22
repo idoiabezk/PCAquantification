@@ -21,7 +21,7 @@ library(openxlsx)
 #filter(rsquared > 0.7) #cannot do this as some are still false positive and need to replace formula later with 0 for nnls 
 
 # NEED TO ADD using case_when or elseif..
-# if (sum(!is.na(filtered_dataA$`Normalized Area`)) == 0 || sum(!is.na(filtered_dataA$`Analyte Concentration`)) == 0) {
+# if (sum(!is.na(filtered_dataA$Area)) == 0 || sum(!is.na(filtered_dataA$`Analyte Concentration`)) == 0) {
 #       cat("No valid cases for fitting the model for molecule:", molecule_name, "\n")
 # OR add a filter to remove those rsquared that are very low (perhaps below 0.7?)  
 
@@ -30,11 +30,12 @@ library(openxlsx)
 # reading data from excel
 Skyline_output <- read_excel("F:/LINKOPING/Manuscripts/Skyline/Skyline/OrbitrapDust.xlsx") |>
   mutate(`Analyte Concentration` = as.numeric(`Analyte Concentration`)) |> 
-  mutate(`Normalized Area` = as.numeric(`Normalized Area`)) |> 
-  mutate(`Normalized Area` = replace_na(`Normalized Area`, 0)) |> # Replace missing values in the Response_factor column with 0
+  mutate(Area = as.numeric(Area)) |> 
+  mutate(Area = replace_na(Area, 0)) |> # Replace missing values in the Response_factor column with 0
   mutate(Area = replace_na(Area, 0)) |>
   mutate(RatioQuanToQual = as.numeric(RatioQuanToQual)) |> #--< convert to numeric #-->
   mutate(RatioQualToQuan = as.numeric(RatioQualToQuan)) #--< convert to numeric #-->
+
 
 
 #This is currently filtered for C10-C13 only to compare with the Perkons script. Will remove later or add as an argument in function
@@ -43,11 +44,13 @@ CPs_standards <- Skyline_output |>
          Molecule != "IS",
          Molecule != "RS",
          `Isotope Label Type` == "Quan",
-         Note != "NA") |> 
+         Note != "NA") |>
   group_by(Note, Molecule) |>
-  mutate(rel_int = `Normalized Area`/sum(`Normalized Area`)) |> #why ius it needed? Maybe can be removed
+  mutate(rel_int = Area/sum(Area)) |> #why ius it needed? Maybe can be removed
   nest() |> 
-  mutate(models = map(data, ~lm(`Normalized Area` ~ `Analyte Concentration`, data = .x))) |> 
+  # Remove groups where all 'Analyte Concentration' values are NA or there are no non-NA cases
+  filter(map_lgl(data, ~sum(!is.na(.x$`Analyte Concentration`)) > 0)) |> 
+  mutate(models = map(data, ~lm(Area ~ `Analyte Concentration`, data = .x))) |> 
   mutate(coef = map(models, coef)) |> 
   mutate(Response_factor = map(coef, pluck("`Analyte Concentration`"))) |> 
   mutate(intercept = map(coef, pluck("(Intercept)"))) |> 
@@ -58,24 +61,35 @@ CPs_standards <- Skyline_output |>
   mutate(Response_factor = if_else(Response_factor < 0, 0, Response_factor)) |> # replace negative RF with 0
   mutate(rsquared = ifelse(is.nan(rsquared), 0, rsquared)) |> 
   mutate(Chain_length = paste0("C", str_extract(Molecule, "(?<=C)[^H]+"))) |> 
-  #filter(Chain_length == "C10" | Chain_length == "C11" | Chain_length == "C12" | Chain_length == "C13") |> #this will be remove later or added as arg in fn
+  #filter(Chain_length == "C18" | Chain_length == "C19" | Chain_length == "C20" | Chain_length == "C21" | Chain_length == "C22" | Chain_length == "C23" | Chain_length == "C24"| Chain_length == "C25"|Chain_length == "C26" | Chain_length == "C27"| Chain_length == "C28"| Chain_length == "C29" | Chain_length == "C30")|> #this will be remove later or added as arg in fn
+  #filter(Note == "G" | Note == "H"| Note == "I" | Note == "J") |> #this will be remove later or added as arg in fn
   ungroup() |> 
   group_by(Note, Chain_length) |> 
   mutate(Sum_response_factor_chainlength = sum(Response_factor, na.rm = TRUE)) |> 
   ungroup()
 
+#For SCCPs
+CPs_standardsS<-CPs_standards |> 
+filter(str_detect(Note, "S-")) |> 
+mutate(Area = if_else(Chain_length %in% c("C14", "C15", "C16", "C17"), 0, Response_factor))  
+#For MCCPs
+CPs_standardsM<-CPs_standards |> 
+  filter(str_detect(Note, "M-")) |> 
+  mutate(Area = if_else(Chain_length %in% c("C10", "C11", "C12", "C13"), 0, Response_factor))  
+#Together
+CPs_standards<- rbind(CPs_standardsS, CPs_standardsM)
 
 
 CPs_samples <- Skyline_output |> 
-  filter(`Sample Type` == "Unknown",
+  filter(`Sample Type` %in% c("Unknown", "Blank"),
          Molecule != "IS",
          Molecule != "RS",
          `Isotope Label Type` == "Quan") |> 
   mutate(Chain_length = paste0("C", str_extract(Molecule, "(?<=C)[^H]+"))) |> 
-  #filter(Chain_length == "C10" | Chain_length == "C11" | Chain_length == "C12" | Chain_length == "C13") |> #this will be remove later or added as arg in fn
+  #filter(Chain_length == "C18" | Chain_length == "C19" | Chain_length == "C20" | Chain_length == "C21" | Chain_length == "C22" | Chain_length == "C23" | Chain_length == "C24"| Chain_length == "C25"|Chain_length == "C26" | Chain_length == "C27"| Chain_length == "C28"| Chain_length == "C29" | Chain_length == "C30") |> #this will be remove later or added as arg in fn
   group_by(`Replicate Name`) |> 
-  mutate(Relative_distribution = `Normalized Area` / sum(`Normalized Area`, na.rm = TRUE)) |> 
-  select(Molecule, `Normalized Area`, Relative_distribution) |> 
+  mutate(Relative_distribution = Area / sum(Area, na.rm = TRUE)) |> 
+  select(Molecule, Area, Relative_distribution) |> 
   mutate(across(Relative_distribution, ~replace(., is.nan(.), 0))) |>    #replace NaN with zero
   #nest() |> 
   ungroup() 
@@ -103,7 +117,7 @@ combined_matrix <- CPs_standards_input  |>
 # Ensure combined_sample is correctly defined with nested data frames prior to the deconvolution
 combined_sample <- CPs_samples  |> 
   group_by(`Replicate Name`) |> 
-  select(-Molecule, -`Normalized Area`) |> 
+  select(-Molecule, -Area) |> 
   nest() |> 
   ungroup()
 
@@ -295,7 +309,7 @@ Samples_Concentration<- Samples_Concentration |>
 ######################################################### SAVE RESULTS ###################################################################
 
 # Specify the file path where you want to save the Excel file
-excel_file <- "F:/LINKOPING/Manuscripts/Skyline/Skyline/Samples_Concentration.xlsx"
+excel_file <- "F:/LINKOPING/Manuscripts/Skyline/Skyline/Samples_ConcentrationScript.xlsx"
 
 # Write 'Samples_Concentration' to Excel
 write.xlsx(Samples_Concentration, excel_file, rowNames = FALSE)
@@ -322,7 +336,7 @@ cat("Excel file saved:", excel_file, "\n")
 ################################### CHANGE SO IT TAKES ALL THE SAMPLES###################################
 #CPs_samples_individual <- CPs_samples |> 
 #filter(`Replicate Name` == "NIST_R1") |> 
-#select(Molecule, `Normalized Area`, Relative_distribution)
+#select(Molecule, Area, Relative_distribution)
 #############################################################################################
 
 #combined_matrix <- CPs_standards_input |> 
@@ -331,7 +345,7 @@ cat("Excel file saved:", excel_file, "\n")
 
 #combined_sample <- CPs_samples |> 
 # group_by(`Replicate Name`) |> 
-#select(-Molecule, -`Normalized Area`) |> 
+#select(-Molecule, -Area) |> 
 #nest() |> 
 #ungroup() 
 
@@ -374,7 +388,7 @@ cat("Excel file saved:", excel_file, "\n")
 #mutate(Standard_response = CPs_standards$Response_factor * deconv_coef) #Calculate the concentration in the standards
 
 #Standard_response <- sum(CPs_standards$Response_factor) #Sum the concentration of the homologues
-#SumResponse <- sum(CPs_samples_individual$`Normalized Area`) #Sum the signal of the homologues in the sample
+#SumResponse <- sum(CPs_samples_individual$Area) #Sum the signal of the homologues in the sample
 #SumConcentration <- SumResponse/Standard_response #Calculate the sum concentration in the sample
 
 #CPs_samples_individual <- CPs_samples_individual |> 
