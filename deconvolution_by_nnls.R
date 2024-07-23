@@ -28,7 +28,7 @@ library(openxlsx)
 ##############
 
 # reading data from excel
-Skyline_output <- read_excel("F:/LINKOPING/Manuscripts/Skyline/Skyline/OrbitrapDust.xlsx") |>
+Skyline_output <- read_excel("F:/LINKOPING/CP analysis/Samples_From_Orebro/Skyline/ResultsFromSkiline.xlsx") |>
   mutate(`Analyte Concentration` = as.numeric(`Analyte Concentration`)) |> 
   mutate(Area = as.numeric(Area)) |> 
   mutate(Area = replace_na(Area, 0)) |> # Replace missing values in the Response_factor column with 0
@@ -71,13 +71,17 @@ CPs_standards <- Skyline_output |>
 #For SCCPs
 CPs_standardsS<-CPs_standards |> 
 filter(str_detect(Note, "S-")) |> 
-mutate(Area = if_else(Chain_length %in% c("C14", "C15", "C16", "C17"), 0, Response_factor))  
+mutate(Response_factor = if_else(Chain_length %in% c("C14", "C15", "C16", "C17", "C18", "C19", "C20", "C21", "C22", "C23", "C24", "C25", "C26", "C27", "C28", "C29", "C30"), 0, Response_factor))  
 #For MCCPs
 CPs_standardsM<-CPs_standards |> 
   filter(str_detect(Note, "M-")) |> 
-  mutate(Area = if_else(Chain_length %in% c("C10", "C11", "C12", "C13"), 0, Response_factor))  
+  mutate(Response_factor = if_else(Chain_length %in% c("C10", "C11", "C12", "C13", "C18", "C19", "C20", "C21", "C22", "C23", "C24", "C25", "C26", "C27", "C28", "C29", "C30"), 0, Response_factor))  
+#For MCCPs
+CPs_standardsL<-CPs_standards |> 
+  filter(str_detect(Note, "L-")) |> 
+  mutate(Response_factor = if_else(Chain_length %in% c("C10", "C11", "C12", "C13", "C14", "C15", "C16", "C17"), 0, Response_factor))  
 #Together
-CPs_standards<- rbind(CPs_standardsS, CPs_standardsM)
+CPs_standards<- rbind(CPs_standardsS, CPs_standardsM, CPs_standardsL)
 
 
 CPs_samples <- Skyline_output |> 
@@ -309,7 +313,7 @@ Samples_Concentration<- Samples_Concentration |>
 ######################################################### SAVE RESULTS ###################################################################
 
 # Specify the file path where you want to save the Excel file
-excel_file <- "F:/LINKOPING/Manuscripts/Skyline/Skyline/Samples_ConcentrationScript.xlsx"
+excel_file <- "F:/LINKOPING/CP analysis/Samples_From_Orebro/Samples_ConcentrationFromScript2.xlsx"
 
 # Write 'Samples_Concentration' to Excel
 write.xlsx(Samples_Concentration, excel_file, rowNames = FALSE)
