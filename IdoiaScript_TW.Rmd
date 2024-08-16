@@ -518,37 +518,3 @@ for (sample_name in unique_sample_names) {
   
 }
 ```
-
-
-
-THANH TEST SCCP Standards
-```{r}
-
-Cal_A <- read_excel("./data/OrbitrapDust.xlsx") |>
-  mutate(`Analyte Concentration` = as.numeric(`Analyte Concentration`)) |> 
-  mutate(`Normalized Area` = as.numeric(`Normalized Area`)) |> 
-  mutate(`Normalized Area` = replace_na(`Normalized Area`, 0)) |> # Replace missing values in the Response_factor column with 0
-  mutate(Area = replace_na(Area, 0)) |>
-  mutate(RatioQuanToQual = as.numeric(RatioQuanToQual)) |> #--< convert to numeric #-->
-  mutate(RatioQualToQuan = as.numeric(RatioQualToQuan)) #--< convert to numeric #-->
-
-
-Cal_A_group <- Cal_A |>
-  filter(`Isotope Label Type` == "Quan")|>
-  filter(`Sample Type` == "Standard") |> 
-  filter(str_detect(Molecule, "C9", negate = TRUE))|>#Exclude the calibration vSCCPs
-  filter(str_detect(Molecule, "C14", negate = TRUE))|>#Exclude the calibration MCCPs
-  filter(str_detect(Molecule, "C15", negate = TRUE))|>#Exclude the calibration MCCPs
-  filter(str_detect(Molecule, "C16", negate = TRUE))|>#Exclude the calibration MCCPs
-  filter(str_detect(Molecule, "C17", negate = TRUE)) |>#Exclude the calibration MCCPs
-  filter(str_detect(Molecule, "IS", negate = TRUE)) |> #Exclude the calibration IS
-  filter(str_detect(Molecule, "RS", negate = TRUE)) |> #Exclude the calibration RS
-  drop_na(Note) |> 
-  group_by(Note, Molecule) |> 
-  nest() |> 
-  mutate(models = map(data, ~lm(`Normalized Area` ~ `Analyte Concentration`, data = .x)))  |> 
-  mutate()
-  
-
-      
-```
